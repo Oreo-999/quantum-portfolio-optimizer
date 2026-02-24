@@ -27,6 +27,7 @@ class PortfolioResponse(BaseModel):
     benchmark: Benchmark
     correlation_matrix: List[List[float]]
     tickers: List[str]
+    dropped_tickers: List[str]
     backend_used: str
     used_simulator_fallback: bool
     fallback_reason: Optional[str] = None

@@ -52,7 +52,6 @@ def validate_tickers_endpoint(tickers: List[str] = Query(...)):
 @app.post("/optimize", response_model=PortfolioResponse)
 def optimize(req: PortfolioRequest):
     tickers = req.tickers
-    n = len(tickers)
 
     # 1. Fetch stock data for all tickers
     try:
@@ -61,6 +60,10 @@ def optimize(req: PortfolioRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {exc}")
+
+    # Use the validated ticker list (may be shorter if some were dropped)
+    tickers = stock_data.tickers
+    n = len(tickers)
 
     # 2. Classical Markowitz on all tickers
     try:
@@ -123,6 +126,7 @@ def optimize(req: PortfolioRequest):
         benchmark=Benchmark(**spy_metrics),
         correlation_matrix=stock_data.correlation_matrix.tolist(),
         tickers=tickers,
+        dropped_tickers=stock_data.dropped_tickers,
         backend_used=backend_config.backend_name,
         used_simulator_fallback=backend_config.used_simulator_fallback,
         fallback_reason=backend_config.fallback_reason,
