@@ -4,39 +4,34 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: {
-          DEFAULT: "#0f1117",
-          card: "#161b27",
-          border: "#1e2535",
-          hover: "#1a2033",
+        bg: "#080808",
+        surface: "#101010",
+        card: "#141414",
+        border: "#1e1e1e",
+        "border-soft": "#2a2a2a",
+        muted: "#3a3a3a",
+        subtle: "#6b6b6b",
+        secondary: "#a0a0a0",
+        primary: "#e8e8e8",
+        white: "#ffffff",
+        blue: {
+          DEFAULT: "#3b82f6",
+          dim: "rgba(59,130,246,0.1)",
+          border: "rgba(59,130,246,0.25)",
         },
-        accent: {
-          DEFAULT: "#6366f1",
-          light: "#818cf8",
-          dim: "rgba(99,102,241,0.15)",
-        },
-        quantum: "#a78bfa",
-        classical: "#34d399",
-        neutral: {
-          50: "#f8fafc",
-          200: "#e2e8f0",
-          400: "#94a3b8",
-          500: "#64748b",
-          600: "#475569",
-          700: "#334155",
-          800: "#1e293b",
-          900: "#0f172a",
-        },
+        qaoa: "#60a5fa",
+        classical: "#737373",
+        positive: "#4ade80",
+        negative: "#f87171",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       animation: {
         "spin-slow": "spin 2s linear infinite",
-        "pulse-slow": "pulse 3s ease-in-out infinite",
-        "fade-in": "fadeIn 0.4s ease-out",
-        "slide-up": "slideUp 0.4s ease-out",
+        "fade-in": "fadeIn 0.3s ease-out",
+        "slide-up": "slideUp 0.35s ease-out",
       },
       keyframes: {
         fadeIn: {
@@ -44,7 +39,7 @@ export default {
           "100%": { opacity: "1" },
         },
         slideUp: {
-          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "0%": { opacity: "0", transform: "translateY(12px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },

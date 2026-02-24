@@ -1,103 +1,62 @@
 import React, { useMemo } from "react";
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
-} from "recharts";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Legend } from "recharts";
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-surface-card border border-surface-border rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-xs text-neutral-400 mb-1">{label}</p>
+    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-xl text-xs space-y-1">
+      <p className="text-subtle mb-1">{label}</p>
       {payload.map((p) => (
-        <p key={p.name} className="text-sm font-medium" style={{ color: p.color }}>
-          {p.name}: {p.value >= 0 ? "+" : ""}{p.value.toFixed(2)}%
-        </p>
+        <div key={p.name} className="flex items-center justify-between gap-4">
+          <span style={{ color: p.color }}>{p.name}</span>
+          <span className="font-mono text-primary">{p.value >= 0 ? "+" : ""}{p.value.toFixed(1)}%</span>
+        </div>
       ))}
     </div>
   );
 };
 
 export default function BenchmarkChart({ metrics, benchmark }) {
-  // Simulate growth curves from annualized return/vol using geometric Brownian motion steps
   const data = useMemo(() => {
     const months = 24;
-    const qaoa_monthly = metrics.qaoa.expected_return / 12;
-    const spy_monthly = benchmark.expected_return / 12;
-
-    const points = [];
-    let qVal = 100;
-    let sVal = 100;
-
-    for (let m = 0; m <= months; m++) {
-      if (m === 0) {
-        points.push({ month: "Start", QAOA: 0, "S&P 500": 0 });
-        continue;
-      }
-      qVal *= (1 + qaoa_monthly);
-      sVal *= (1 + spy_monthly);
-
-      const label = m <= 12 ? `${m}M` : `${Math.floor(m / 12)}Y${m % 12 ? `${m % 12}M` : ""}`;
-      points.push({
-        month: label,
-        QAOA: parseFloat(((qVal - 100)).toFixed(2)),
-        "S&P 500": parseFloat(((sVal - 100)).toFixed(2)),
-      });
+    const qMonthly = metrics.qaoa.expected_return / 12;
+    const sMonthly = benchmark.expected_return / 12;
+    const pts = [{ m: "Start", QAOA: 0, "S&P 500": 0 }];
+    let qv = 100, sv = 100;
+    for (let m = 1; m <= months; m++) {
+      qv *= (1 + qMonthly);
+      sv *= (1 + sMonthly);
+      const label = m <= 12 ? `${m}M` : m === 24 ? "2Y" : `${m}M`;
+      pts.push({ m: label, QAOA: parseFloat((qv - 100).toFixed(1)), "S&P 500": parseFloat((sv - 100).toFixed(1)) });
     }
-    return points;
+    return pts;
   }, [metrics, benchmark]);
 
   return (
     <div className="card">
-      <div className="flex items-start justify-between mb-4">
-        <h3 className="text-sm font-semibold text-neutral-200">Portfolio vs S&P 500</h3>
-        <span className="text-[10px] text-neutral-500 bg-surface border border-surface-border px-2 py-0.5 rounded">
-          Projected · 2-year
-        </span>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-primary">vs S&P 500</h3>
+        <span className="text-[10px] text-muted border border-border rounded px-2 py-0.5">Projected · 24 months</span>
       </div>
-      <ResponsiveContainer width="100%" height={240}>
+      <ResponsiveContainer width="100%" height={200}>
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1e2535" />
-          <XAxis
-            dataKey="month"
-            tick={{ fontSize: 10, fill: "#64748b" }}
-            axisLine={false}
-            tickLine={false}
-            interval={3}
-          />
+          <CartesianGrid strokeDasharray="2 2" stroke="#1e1e1e" />
+          <XAxis dataKey="m" tick={{ fontSize: 10, fill: "#6b6b6b" }} axisLine={false} tickLine={false} interval={3} />
           <YAxis
-            tick={{ fontSize: 10, fill: "#64748b" }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(v) => `${v >= 0 ? "+" : ""}${v}%`}
-            width={52}
+            tick={{ fontSize: 10, fill: "#6b6b6b" }} axisLine={false} tickLine={false}
+            tickFormatter={(v) => `${v >= 0 ? "+" : ""}${v}%`} width={48}
           />
           <Tooltip content={<CustomTooltip />} />
+          <ReferenceLine y={0} stroke="#2a2a2a" strokeDasharray="3 3" />
           <Legend
-            wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-            formatter={(v) => <span style={{ color: "#94a3b8" }}>{v}</span>}
+            wrapperStyle={{ fontSize: 11, paddingTop: 10 }}
+            formatter={(v) => <span style={{ color: "#6b6b6b" }}>{v}</span>}
           />
-          <ReferenceLine y={0} stroke="#1e2535" strokeDasharray="4 4" />
-          <Line
-            type="monotone"
-            dataKey="QAOA"
-            stroke="#818cf8"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4, fill: "#818cf8" }}
-          />
-          <Line
-            type="monotone"
-            dataKey="S&P 500"
-            stroke="#34d399"
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4, fill: "#34d399" }}
-          />
+          <Line type="monotone" dataKey="QAOA" stroke="#3b82f6" strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: "#3b82f6" }} />
+          <Line type="monotone" dataKey="S&P 500" stroke="#3a3a3a" strokeWidth={1.5} dot={false} activeDot={{ r: 3, fill: "#3a3a3a" }} />
         </LineChart>
       </ResponsiveContainer>
-      <p className="text-[10px] text-neutral-600 mt-2">
-        * Projection uses annualized expected return. Actual results will vary.
-      </p>
+      <p className="text-[10px] text-muted mt-2">Projection based on annualized expected return. Past performance does not guarantee future results.</p>
     </div>
   );
 }

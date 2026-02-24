@@ -1,6 +1,7 @@
 """
-Stock data fetcher: pulls 2 years of adjusted close prices via yfinance,
-computes daily returns, annualized mean returns, and covariance matrix.
+Stock data fetcher: pulls 2 years of adjusted close prices via yfinance.
+Downloads each ticker individually to avoid yfinance MultiIndex column issues
+across different versions.
 """
 
 import numpy as np
@@ -18,44 +19,78 @@ class StockData:
     mean_returns: np.ndarray       # annualized, shape (n,)
     cov_matrix: np.ndarray         # annualized, shape (n, n)
     correlation_matrix: np.ndarray # shape (n, n)
-    daily_returns: pd.DataFrame    # raw daily returns for charting
+    daily_returns: pd.DataFrame    # raw daily returns
+
+
+def _extract_close(raw: pd.DataFrame, ticker: str) -> pd.Series:
+    """
+    Robustly extract the Close price series from a yfinance download result.
+    Handles flat columns, MultiIndex columns, and auto_adjust variants.
+    """
+    if raw.empty:
+        return pd.Series(dtype=float, name=ticker)
+
+    cols = raw.columns
+
+    # MultiIndex: (field, ticker) — common for multi-ticker downloads
+    if isinstance(cols, pd.MultiIndex):
+        if ("Close", ticker) in cols:
+            return raw[("Close", ticker)].rename(ticker)
+        if ("Adj Close", ticker) in cols:
+            return raw[("Adj Close", ticker)].rename(ticker)
+        # Try first available close-like column
+        for field in ["Close", "Adj Close"]:
+            matches = [(f, t) for (f, t) in cols if f == field]
+            if matches:
+                return raw[matches[0]].rename(ticker)
+        return pd.Series(dtype=float, name=ticker)
+
+    # Flat columns (single ticker download)
+    for col in ["Close", "Adj Close"]:
+        if col in cols:
+            return raw[col].rename(ticker)
+
+    return pd.Series(dtype=float, name=ticker)
 
 
 def fetch_stock_data(tickers: List[str]) -> StockData:
     end = datetime.today()
     start = end - timedelta(days=2 * 365)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
 
-    raw = yf.download(
-        tickers,
-        start=start.strftime("%Y-%m-%d"),
-        end=end.strftime("%Y-%m-%d"),
-        auto_adjust=True,
-        progress=False,
-    )
+    close_series = {}
+    failed = []
 
-    if raw.empty:
-        raise HTTPException(status_code=422, detail="No price data returned. Check tickers.")
+    for ticker in tickers:
+        try:
+            raw = yf.download(
+                ticker,
+                start=start_str,
+                end=end_str,
+                auto_adjust=True,
+                progress=False,
+                actions=False,
+            )
+            series = _extract_close(raw, ticker)
+            if series.empty or series.dropna().empty:
+                failed.append(ticker)
+            else:
+                close_series[ticker] = series
+        except Exception:
+            failed.append(ticker)
 
-    # Handle single vs multi ticker column structure
-    if len(tickers) == 1:
-        close = raw[["Close"]].copy()
-        close.columns = tickers
-    else:
-        close = raw["Close"].copy()
-
-    # Drop tickers with no data and validate
-    close.dropna(axis=1, how="all", inplace=True)
-    missing = [t for t in tickers if t not in close.columns]
-    if missing:
+    if failed:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid or unavailable tickers: {', '.join(missing)}",
+            detail=f"Invalid or unavailable tickers: {', '.join(failed)}",
         )
 
-    # Reorder to match requested order
-    close = close[tickers]
+    if not close_series:
+        raise HTTPException(status_code=422, detail="No price data returned. Check tickers.")
 
-    # Drop rows where any ticker has NaN (aligns data across tickers)
+    # Combine into a single DataFrame aligned on dates
+    close = pd.DataFrame(close_series)[tickers]
     close.dropna(inplace=True)
 
     if len(close) < 30:
@@ -81,26 +116,29 @@ def fetch_stock_data(tickers: List[str]) -> StockData:
 
 
 def validate_tickers(tickers: List[str]) -> dict:
-    """Quick validation: download 5 days of data and check which tickers returned prices."""
     end = datetime.today()
     start = end - timedelta(days=10)
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
 
     valid = []
     invalid = []
 
     for ticker in tickers:
         try:
-            data = yf.download(
+            raw = yf.download(
                 ticker,
-                start=start.strftime("%Y-%m-%d"),
-                end=end.strftime("%Y-%m-%d"),
+                start=start_str,
+                end=end_str,
                 auto_adjust=True,
                 progress=False,
+                actions=False,
             )
-            if data.empty or len(data) < 2:
-                invalid.append(ticker)
-            else:
+            series = _extract_close(raw, ticker).dropna()
+            if len(series) >= 2:
                 valid.append(ticker)
+            else:
+                invalid.append(ticker)
         except Exception:
             invalid.append(ticker)
 

@@ -4,19 +4,7 @@ import TickerInput from "./components/TickerInput";
 import PortfolioResults from "./components/PortfolioResults";
 import LoadingState from "./components/LoadingState";
 
-function AtomIcon() {
-  return (
-    <svg className="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0" />
-      <ellipse cx="12" cy="12" rx="10" ry="4" strokeLinecap="round" />
-      <ellipse cx="12" cy="12" rx="10" ry="4" strokeLinecap="round" transform="rotate(60 12 12)" />
-      <ellipse cx="12" cy="12" rx="10" ry="4" strokeLinecap="round" transform="rotate(120 12 12)" />
-    </svg>
-  );
-}
-
 export default function App() {
-  const portfolio = usePortfolio();
   const {
     tickers, setTickers,
     riskTolerance, setRiskTolerance,
@@ -24,30 +12,18 @@ export default function App() {
     useSimulator, setUseSimulator,
     results, loading, loadingStage, error,
     handleSubmit, resetResults,
-  } = portfolio;
+  } = usePortfolio();
 
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-bg text-primary">
       {/* Header */}
-      <header className="border-b border-surface-border bg-surface-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <AtomIcon />
-            <span className="text-sm font-semibold text-neutral-100 tracking-tight">
-              Quantum Portfolio Optimizer
-            </span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden sm:flex items-center gap-1.5 text-xs text-neutral-500">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              QAOA · Markowitz
-            </span>
-            <a
-              href="https://qiskit.org"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
-            >
+      <header className="border-b border-border sticky top-0 z-10 bg-bg/90 backdrop-blur-sm">
+        <div className="max-w-5xl mx-auto px-6 h-12 flex items-center justify-between">
+          <span className="text-sm font-medium tracking-tight">Quantum Portfolio Optimizer</span>
+          <div className="flex items-center gap-5">
+            <span className="hidden sm:block text-xs text-muted">QAOA · Markowitz · IBM Quantum</span>
+            <a href="https://qiskit.org" target="_blank" rel="noopener noreferrer"
+               className="text-[11px] text-muted hover:text-secondary transition-colors">
               Qiskit
             </a>
           </div>
@@ -55,76 +31,70 @@ export default function App() {
       </header>
 
       {/* Main */}
-      <main className="max-w-6xl mx-auto px-6 py-10">
-        {/* Hero */}
+      <main className="max-w-5xl mx-auto px-6 py-8">
+        {/* Hero — only shown before results */}
         {!results && !loading && (
-          <div className="mb-10 animate-fade-in">
-            <h1 className="text-3xl font-bold text-neutral-50 tracking-tight">
-              Optimize with{" "}
-              <span className="text-accent">quantum computing</span>
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Portfolio optimization,<br />
+              <span className="text-subtle font-normal">powered by quantum computing.</span>
             </h1>
-            <p className="mt-2 text-neutral-500 max-w-xl text-sm leading-relaxed">
-              Uses the Quantum Approximate Optimization Algorithm (QAOA) on real IBM Quantum hardware
-              or simulator to find optimal stock allocations — compared against classical Markowitz theory.
+            <p className="mt-3 text-sm text-subtle max-w-lg leading-relaxed">
+              Uses QAOA on real IBM Quantum hardware or simulator to find optimal stock allocations,
+              then benchmarks against classical Markowitz mean-variance optimization.
             </p>
           </div>
         )}
 
-        {/* Content layout */}
-        <div className={`${results ? "grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-8 items-start" : "grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-8 items-start"}`}>
-          {/* Left panel — always visible */}
-          <div className="lg:sticky lg:top-20">
+        {/* Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 items-start">
+          {/* Left — always sticky */}
+          <div className="lg:sticky lg:top-18 space-y-3">
             <TickerInput
-              tickers={tickers}
-              setTickers={setTickers}
-              riskTolerance={riskTolerance}
-              setRiskTolerance={setRiskTolerance}
-              apiKey={apiKey}
-              setApiKey={setApiKey}
-              useSimulator={useSimulator}
-              setUseSimulator={setUseSimulator}
-              onSubmit={handleSubmit}
-              loading={loading}
-              error={error}
+              tickers={tickers} setTickers={setTickers}
+              riskTolerance={riskTolerance} setRiskTolerance={setRiskTolerance}
+              apiKey={apiKey} setApiKey={setApiKey}
+              useSimulator={useSimulator} setUseSimulator={setUseSimulator}
+              onSubmit={handleSubmit} loading={loading} error={error}
             />
 
-            {/* Info cards */}
+            {/* Info — only before results */}
             {!results && !loading && (
-              <div className="mt-4 space-y-2">
-                <InfoCard
-                  icon="⚡"
-                  title="Real Quantum Hardware"
-                  desc="≤5 stocks run on IBM Quantum free-tier hardware"
-                />
-                <InfoCard
-                  icon="🔁"
-                  title="Auto Fallback"
-                  desc="6–10 stocks automatically use AerSimulator"
-                />
-                <InfoCard
-                  icon="📊"
-                  title="Dual Comparison"
-                  desc="QAOA vs Markowitz with S&P 500 benchmark"
-                />
+              <div className="space-y-1">
+                {[
+                  ["Real hardware", "IBM Quantum free tier for 2–5 stocks"],
+                  ["Auto fallback", "6–10 stocks switch to AerSimulator"],
+                  ["Dual output", "QAOA vs Markowitz with S&P 500 benchmark"],
+                ].map(([title, desc]) => (
+                  <div key={title} className="flex gap-3 px-4 py-3 rounded-lg border border-border">
+                    <div>
+                      <p className="text-xs font-medium text-secondary">{title}</p>
+                      <p className="text-[11px] text-muted mt-0.5">{desc}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          {/* Right panel */}
+          {/* Right */}
           <div>
             {loading && (
-              <div className="card animate-fade-in">
+              <div className="card">
                 <LoadingState stage={loadingStage} useSimulator={useSimulator} />
               </div>
             )}
 
             {!loading && !results && (
-              <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-                <div className="w-16 h-16 rounded-2xl bg-accent-dim border border-accent/20 flex items-center justify-center mb-4">
-                  <AtomIcon />
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-12 h-12 rounded-xl border border-border flex items-center justify-center mb-4">
+                  <svg className="w-5 h-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round"
+                      d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
+                  </svg>
                 </div>
-                <p className="text-sm font-medium text-neutral-400">Configure your portfolio on the left</p>
-                <p className="text-xs text-neutral-600 mt-1">Results will appear here after optimization</p>
+                <p className="text-sm text-subtle">Configure your portfolio on the left</p>
+                <p className="text-xs text-muted mt-1">Results will appear here</p>
               </div>
             )}
 
@@ -135,29 +105,12 @@ export default function App() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-surface-border mt-20 py-6">
-        <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p className="text-xs text-neutral-600">
-            Quantum Portfolio Optimizer · Educational use only
-          </p>
-          <p className="text-xs text-neutral-700">
-            Not financial advice · Powered by Qiskit + FastAPI
-          </p>
+      <footer className="border-t border-border mt-16 py-5">
+        <div className="max-w-5xl mx-auto px-6 flex justify-between items-center">
+          <p className="text-[11px] text-muted">Quantum Portfolio Optimizer · Educational use only</p>
+          <p className="text-[11px] text-muted">Qiskit · FastAPI · React</p>
         </div>
       </footer>
-    </div>
-  );
-}
-
-function InfoCard({ icon, title, desc }) {
-  return (
-    <div className="bg-surface-card border border-surface-border rounded-lg px-4 py-3 flex items-start gap-3">
-      <span className="text-base mt-0.5">{icon}</span>
-      <div>
-        <p className="text-xs font-medium text-neutral-300">{title}</p>
-        <p className="text-xs text-neutral-600 mt-0.5">{desc}</p>
-      </div>
     </div>
   );
 }

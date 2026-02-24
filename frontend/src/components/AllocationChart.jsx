@@ -1,68 +1,70 @@
 import React from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
-const QUANTUM_COLORS = ["#818cf8", "#a78bfa", "#c4b5fd", "#6366f1", "#7c3aed", "#4f46e5", "#38bdf8", "#818cf8", "#6d28d9", "#4338ca"];
-const CLASSICAL_COLORS = ["#34d399", "#6ee7b7", "#10b981", "#059669", "#047857", "#065f46", "#4ade80", "#22c55e", "#16a34a", "#15803d"];
-
-function pctToData(allocation) {
-  return Object.entries(allocation)
-    .filter(([, v]) => v > 0)
-    .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }));
-}
+const QAOA_COLORS = ["#60a5fa", "#93c5fd", "#3b82f6", "#1d4ed8", "#2563eb", "#1e40af", "#dbeafe", "#bfdbfe"];
+const CLASS_COLORS = ["#737373", "#a3a3a3", "#525252", "#404040", "#d4d4d4", "#e5e5e5", "#262626", "#171717"];
 
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
-  const { name, value } = payload[0];
   return (
-    <div className="bg-surface-card border border-surface-border rounded-lg px-3 py-2 shadow-xl">
-      <p className="text-xs font-mono font-medium text-neutral-200">{name}</p>
-      <p className="text-sm font-semibold text-neutral-50">{value}%</p>
+    <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-xl text-xs">
+      <p className="font-mono font-medium text-primary">{payload[0].name}</p>
+      <p className="text-secondary mt-0.5">{payload[0].value}%</p>
     </div>
   );
 };
 
-function AllocationPie({ data, colors, label }) {
+function Pie2({ data, colors, label }) {
+  const noAlloc = data.every((d) => d.value === 0);
+
   return (
     <div className="flex-1 min-w-0">
-      <p className="label text-center mb-3">{label}</p>
-      <ResponsiveContainer width="100%" height={220}>
+      <p className="label text-center mb-2">{label}</p>
+      <ResponsiveContainer width="100%" height={190}>
         <PieChart>
           <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={50}
-            outerRadius={85}
-            paddingAngle={3}
+            data={noAlloc ? [{ name: "None", value: 1 }] : data}
+            cx="50%" cy="50%"
+            innerRadius={44} outerRadius={74}
+            paddingAngle={noAlloc ? 0 : 3}
             dataKey="value"
+            strokeWidth={0}
           >
-            {data.map((_, i) => (
-              <Cell key={i} fill={colors[i % colors.length]} stroke="transparent" />
+            {(noAlloc ? [{ name: "None", value: 1 }] : data).map((_, i) => (
+              <Cell key={i} fill={noAlloc ? "#1e1e1e" : colors[i % colors.length]} />
             ))}
           </Pie>
-          <Tooltip content={<CustomTooltip />} />
-          <Legend
-            formatter={(value) => (
-              <span className="text-xs font-mono text-neutral-400">{value}</span>
-            )}
-          />
+          {!noAlloc && <Tooltip content={<CustomTooltip />} />}
         </PieChart>
       </ResponsiveContainer>
+
+      {/* Legend */}
+      <div className="space-y-1 mt-1">
+        {data.filter((d) => d.value > 0).map((d, i) => (
+          <div key={d.name} className="flex items-center justify-between text-xs px-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-sm" style={{ background: colors[i % colors.length] }} />
+              <span className="font-mono text-secondary">{d.name}</span>
+            </div>
+            <span className="font-mono text-primary">{d.value}%</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 export default function AllocationChart({ qaoa_allocation, classical_allocation }) {
-  const qData = pctToData(qaoa_allocation);
-  const cData = pctToData(classical_allocation);
+  const toData = (alloc) =>
+    Object.entries(alloc).filter(([, v]) => v > 0).map(([name, value]) => ({ name, value: parseFloat(value.toFixed(1)) }));
 
   return (
     <div className="card">
-      <h3 className="text-sm font-semibold text-neutral-200 mb-4">Portfolio Allocation</h3>
-      <div className="flex gap-6">
-        <AllocationPie data={qData} colors={QUANTUM_COLORS} label="QAOA" />
-        <div className="w-px bg-surface-border" />
-        <AllocationPie data={cData} colors={CLASSICAL_COLORS} label="Classical" />
+      <h3 className="text-sm font-medium text-primary mb-4">Allocation</h3>
+      <div className="flex gap-8">
+        <Pie2 data={toData(qaoa_allocation)} colors={QAOA_COLORS} label="QAOA" />
+        <div className="w-px bg-border" />
+        <Pie2 data={toData(classical_allocation)} colors={CLASS_COLORS} label="Classical" />
       </div>
     </div>
   );

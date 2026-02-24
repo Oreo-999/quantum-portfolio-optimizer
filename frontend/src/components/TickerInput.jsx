@@ -1,8 +1,7 @@
 import React, { useState, useRef, useCallback } from "react";
 
 const MAX_TICKERS = 10;
-
-const POPULAR = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "JPM", "BRK-B", "V"];
+const SUGGESTIONS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX"];
 
 export default function TickerInput({
   tickers, setTickers,
@@ -18,65 +17,37 @@ export default function TickerInput({
   const addTicker = useCallback((raw) => {
     const ticker = raw.trim().toUpperCase();
     if (!ticker) return;
-    if (!/^[A-Z0-9.\-]{1,10}$/.test(ticker)) {
-      setInputError("Invalid ticker format");
-      return;
-    }
-    if (tickers.includes(ticker)) {
-      setInputError("Already added");
-      return;
-    }
-    if (tickers.length >= MAX_TICKERS) {
-      setInputError(`Maximum ${MAX_TICKERS} tickers`);
-      return;
-    }
-    setTickers((prev) => [...prev, ticker]);
+    if (!/^[A-Z0-9.\-]{1,10}$/.test(ticker)) { setInputError("Invalid ticker"); return; }
+    if (tickers.includes(ticker)) { setInputError("Already added"); return; }
+    if (tickers.length >= MAX_TICKERS) { setInputError(`Max ${MAX_TICKERS}`); return; }
+    setTickers((p) => [...p, ticker]);
     setInput("");
     setInputError("");
   }, [tickers, setTickers]);
 
-  const removeTicker = useCallback((t) => {
-    setTickers((prev) => prev.filter((x) => x !== t));
-  }, [setTickers]);
+  const removeTicker = useCallback((t) => setTickers((p) => p.filter((x) => x !== t)), [setTickers]);
 
   const handleKeyDown = (e) => {
-    if (["Enter", ",", " "].includes(e.key)) {
-      e.preventDefault();
-      addTicker(input);
-    }
-    if (e.key === "Backspace" && !input && tickers.length > 0) {
-      setTickers((prev) => prev.slice(0, -1));
-    }
+    if (["Enter", ",", " "].includes(e.key)) { e.preventDefault(); addTicker(input); }
+    if (e.key === "Backspace" && !input && tickers.length > 0) setTickers((p) => p.slice(0, -1));
   };
 
-  const riskLabel =
-    riskTolerance < 0.33 ? "Conservative" : riskTolerance < 0.67 ? "Balanced" : "Aggressive";
+  const riskLabel = riskTolerance < 0.33 ? "Conservative" : riskTolerance < 0.67 ? "Balanced" : "Aggressive";
 
   return (
-    <div className="card space-y-6">
-      {/* Header */}
+    <div className="card space-y-5">
+      {/* Tickers */}
       <div>
-        <h2 className="text-base font-semibold text-neutral-50">Configure Portfolio</h2>
-        <p className="text-xs text-neutral-500 mt-0.5">Add 2–10 stock tickers to analyze</p>
-      </div>
-
-      {/* Ticker input area */}
-      <div>
-        <label className="label mb-2 block">Stocks</label>
+        <label className="label mb-2 block">Tickers</label>
         <div
-          className="min-h-[52px] bg-surface border border-surface-border rounded-lg px-3 py-2 flex flex-wrap gap-2 cursor-text focus-within:border-accent focus-within:ring-1 focus-within:ring-accent transition-colors"
           onClick={() => inputRef.current?.focus()}
+          className="min-h-[44px] bg-surface border border-border rounded-lg px-3 py-2 flex flex-wrap gap-1.5 cursor-text
+                     focus-within:border-blue-border transition-colors"
         >
           {tickers.map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center gap-1.5 bg-accent-dim border border-accent/30 text-accent-light text-xs font-mono font-medium px-2.5 py-1 rounded-md"
-            >
+            <span key={t} className="inline-flex items-center gap-1 bg-white/5 border border-white/10 text-primary text-xs font-mono px-2 py-0.5 rounded-md">
               {t}
-              <button
-                onClick={(e) => { e.stopPropagation(); removeTicker(t); }}
-                className="text-accent/60 hover:text-accent-light transition-colors"
-              >
+              <button onClick={(e) => { e.stopPropagation(); removeTicker(t); }} className="text-subtle hover:text-primary transition-colors ml-0.5">
                 ×
               </button>
             </span>
@@ -88,23 +59,24 @@ export default function TickerInput({
               onChange={(e) => { setInput(e.target.value.toUpperCase()); setInputError(""); }}
               onKeyDown={handleKeyDown}
               onBlur={() => input && addTicker(input)}
-              placeholder={tickers.length === 0 ? "Type a ticker and press Enter…" : ""}
-              className="bg-transparent border-none outline-none text-sm text-neutral-50 placeholder-neutral-600 font-mono min-w-[140px] flex-1"
+              placeholder={tickers.length === 0 ? "AAPL, MSFT…" : ""}
+              className="bg-transparent border-none outline-none text-sm text-primary placeholder-muted font-mono min-w-[100px] flex-1"
             />
           )}
         </div>
-        {inputError && <p className="text-xs text-red-400 mt-1">{inputError}</p>}
+        {inputError && <p className="text-xs text-negative mt-1">{inputError}</p>}
 
-        {/* Popular chips */}
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {POPULAR.filter((t) => !tickers.includes(t)).slice(0, 6).map((t) => (
+        {/* Suggestions */}
+        <div className="flex flex-wrap gap-1 mt-2">
+          {SUGGESTIONS.filter((t) => !tickers.includes(t)).slice(0, 7).map((t) => (
             <button
               key={t}
               onClick={() => addTicker(t)}
               disabled={tickers.length >= MAX_TICKERS}
-              className="text-xs font-mono text-neutral-500 hover:text-neutral-300 hover:bg-surface-hover border border-surface-border px-2 py-0.5 rounded transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              className="text-[11px] font-mono text-subtle hover:text-secondary border border-border hover:border-border-soft
+                         px-1.5 py-0.5 rounded transition-all disabled:opacity-20 disabled:cursor-not-allowed"
             >
-              +{t}
+              {t}
             </button>
           ))}
         </div>
@@ -114,53 +86,38 @@ export default function TickerInput({
       <div>
         <div className="flex justify-between items-center mb-2">
           <label className="label">Risk Tolerance</label>
-          <span className="text-xs font-medium text-accent-light">{riskLabel}</span>
+          <span className="text-xs text-secondary">{riskLabel} · {riskTolerance.toFixed(2)}</span>
         </div>
         <input
           type="range" min="0" max="1" step="0.01"
           value={riskTolerance}
           onChange={(e) => setRiskTolerance(parseFloat(e.target.value))}
-          className="w-full h-1.5 bg-surface-border rounded-full appearance-none cursor-pointer accent-indigo-500"
+          className="w-full h-px bg-border rounded-full appearance-none cursor-pointer
+                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
         />
-        <div className="flex justify-between text-[10px] text-neutral-600 mt-1">
-          <span>Min risk</span>
-          <span>Max return</span>
+        <div className="flex justify-between text-[10px] text-muted mt-1.5">
+          <span>Min risk</span><span>Max return</span>
         </div>
       </div>
 
-      {/* Backend toggle */}
+      {/* Backend */}
       <div>
-        <label className="label mb-3 block">Quantum Backend</label>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setUseSimulator(true)}
-            className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium border transition-all ${
-              useSimulator
-                ? "bg-accent-dim border-accent/40 text-accent-light"
-                : "bg-surface border-surface-border text-neutral-500 hover:border-neutral-600"
-            }`}
-          >
-            AerSimulator
+        <label className="label mb-2 block">Backend</label>
+        <div className="flex gap-1 bg-surface border border-border rounded-lg p-1">
+          <button onClick={() => setUseSimulator(true)} className={`seg-btn ${useSimulator ? "seg-btn-active" : "seg-btn-inactive"}`}>
+            Simulator
           </button>
-          <button
-            onClick={() => setUseSimulator(false)}
-            className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-medium border transition-all ${
-              !useSimulator
-                ? "bg-accent-dim border-accent/40 text-accent-light"
-                : "bg-surface border-surface-border text-neutral-500 hover:border-neutral-600"
-            }`}
-          >
+          <button onClick={() => setUseSimulator(false)} className={`seg-btn ${!useSimulator ? "seg-btn-active" : "seg-btn-inactive"}`}>
             IBM Hardware
           </button>
         </div>
         {!useSimulator && (
-          <p className="text-[11px] text-amber-400/70 mt-2">
-            Real hardware requires an IBM Quantum API key and ≤5 stocks
-          </p>
+          <p className="text-[11px] text-subtle mt-1.5">Requires API key · max 5 stocks</p>
         )}
       </div>
 
-      {/* IBM API key */}
+      {/* IBM key */}
       {!useSimulator && (
         <div className="animate-fade-in">
           <label className="label mb-2 block">IBM Quantum API Key</label>
@@ -168,16 +125,16 @@ export default function TickerInput({
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
-            placeholder="Paste your IBM Quantum API key…"
-            className="input-field font-mono"
+            placeholder="Paste your API key"
+            className="input-field font-mono text-xs"
           />
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
-          <p className="text-sm text-red-400 leading-relaxed">{error}</p>
+        <div className="bg-negative/5 border border-negative/20 rounded-lg px-3.5 py-3">
+          <p className="text-sm text-negative/90 leading-relaxed">{error}</p>
         </div>
       )}
 
@@ -189,20 +146,13 @@ export default function TickerInput({
       >
         {loading ? (
           <>
-            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-80" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
             </svg>
-            Optimizing…
+            Optimizing
           </>
-        ) : (
-          <>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Optimize Portfolio
-          </>
-        )}
+        ) : "Optimize Portfolio"}
       </button>
     </div>
   );
