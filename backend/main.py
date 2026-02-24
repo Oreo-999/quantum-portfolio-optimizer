@@ -16,7 +16,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 
-from models.request_models import PortfolioRequest, QAOA_MAX
+from models.request_models import PortfolioRequest
 from models.response_models import PortfolioResponse, Metrics, SolutionMetrics, Benchmark
 from config import get_backend
 from finance.data import fetch_stock_data, validate_tickers as _validate_tickers
@@ -62,7 +62,7 @@ def optimize(req: PortfolioRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {exc}")
 
-    # 2. Classical Markowitz on ALL tickers
+    # 2. Classical Markowitz on all tickers
     try:
         classical_weights = run_classical_optimization(
             stock_data.mean_returns,
@@ -72,35 +72,18 @@ def optimize(req: PortfolioRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Classical optimization failed: {exc}")
 
-    # 3. Select QAOA subset — top QAOA_MAX stocks by Sharpe-adjusted score
-    #    score = mean_return / sqrt(variance) weighted by risk_tolerance
-    if n > QAOA_MAX:
-        variances = np.diag(stock_data.cov_matrix)
-        score = (
-            req.risk_tolerance * stock_data.mean_returns
-            - (1 - req.risk_tolerance) * np.sqrt(np.maximum(variances, 1e-10))
-        )
-        qaoa_indices = np.argsort(score)[-QAOA_MAX:]
-        qaoa_indices = sorted(qaoa_indices.tolist())
-    else:
-        qaoa_indices = list(range(n))
-
-    qaoa_tickers = [tickers[i] for i in qaoa_indices]
-    qaoa_returns = stock_data.mean_returns[qaoa_indices]
-    qaoa_cov = stock_data.cov_matrix[np.ix_(qaoa_indices, qaoa_indices)]
-
-    # 4. Determine quantum backend (based on QAOA subset size)
+    # 3. Determine quantum backend
     backend_config = get_backend(
         ibm_api_key=req.ibm_api_key,
-        stock_count=len(qaoa_indices),
+        stock_count=n,
         use_simulator_fallback=req.use_simulator_fallback,
     )
 
-    # 5. Run QAOA on subset
+    # 4. Run QAOA on all tickers
     try:
         qaoa_binary, raw_counts = run_qaoa(
-            qaoa_returns,
-            qaoa_cov,
+            stock_data.mean_returns,
+            stock_data.cov_matrix,
             req.risk_tolerance,
             backend_config,
             p=2,
@@ -109,25 +92,19 @@ def optimize(req: PortfolioRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"QAOA optimization failed: {exc}")
 
-    # Map QAOA binary result back to full ticker list
-    qaoa_weights_full = np.zeros(n)
-    selected_local = qaoa_binary.astype(bool)
-    if selected_local.any():
-        selected_global = [qaoa_indices[i] for i, s in enumerate(selected_local) if s]
-        qaoa_weights_full[selected_global] = 1.0 / selected_local.sum()
+    # Convert binary vector to equal-weight allocation among selected stocks
+    selected = qaoa_binary.astype(bool)
+    qaoa_weights = np.zeros(n)
+    if selected.any():
+        qaoa_weights[selected] = 1.0 / selected.sum()
     else:
-        # Fallback: equal weight across QAOA subset
-        qaoa_weights_full[qaoa_indices] = 1.0 / len(qaoa_indices)
+        qaoa_weights = np.ones(n) / n
 
-    # 6. Compute metrics against full universe
-    qaoa_metrics = compute_portfolio_metrics(
-        qaoa_weights_full, stock_data.mean_returns, stock_data.cov_matrix
-    )
-    classical_metrics = compute_portfolio_metrics(
-        classical_weights, stock_data.mean_returns, stock_data.cov_matrix
-    )
+    # 5. Compute metrics
+    qaoa_metrics = compute_portfolio_metrics(qaoa_weights, stock_data.mean_returns, stock_data.cov_matrix)
+    classical_metrics = compute_portfolio_metrics(classical_weights, stock_data.mean_returns, stock_data.cov_matrix)
 
-    # 7. S&P 500 benchmark
+    # 6. S&P 500 benchmark
     try:
         spy_metrics = compute_spy_benchmark()
     except Exception:
@@ -137,7 +114,7 @@ def optimize(req: PortfolioRequest):
         return {ticker: round(float(w) * 100, 2) for ticker, w in zip(tickers, weights)}
 
     return PortfolioResponse(
-        qaoa_allocation=weights_to_pct(qaoa_weights_full),
+        qaoa_allocation=weights_to_pct(qaoa_weights),
         classical_allocation=weights_to_pct(classical_weights),
         metrics=Metrics(
             qaoa=SolutionMetrics(**qaoa_metrics),
@@ -146,7 +123,6 @@ def optimize(req: PortfolioRequest):
         benchmark=Benchmark(**spy_metrics),
         correlation_matrix=stock_data.correlation_matrix.tolist(),
         tickers=tickers,
-        qaoa_tickers=qaoa_tickers,
         backend_used=backend_config.backend_name,
         used_simulator_fallback=backend_config.used_simulator_fallback,
         fallback_reason=backend_config.fallback_reason,

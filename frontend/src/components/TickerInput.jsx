@@ -1,7 +1,6 @@
 import React, { useState, useRef, useCallback } from "react";
 
 const MAX_TICKERS = 50;
-const QAOA_MAX = 10;
 
 const SUGGESTIONS = [
   "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","BRK-B","V","JPM",
@@ -83,12 +82,6 @@ export default function TickerInput({
         </div>
 
         {inputError && <p className="text-xs text-negative mt-1">{inputError}</p>}
-
-        {tickers.length > QAOA_MAX && (
-          <p className="text-[11px] text-subtle mt-1.5">
-            QAOA runs on top {QAOA_MAX} stocks · Classical Markowitz uses all {tickers.length}
-          </p>
-        )}
 
         {/* Suggestions */}
         <div className="mt-2">

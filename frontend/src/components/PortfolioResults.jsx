@@ -9,7 +9,7 @@ import BenchmarkChart from "./BenchmarkChart";
 export default function PortfolioResults({ results, onReset }) {
   const {
     qaoa_allocation, classical_allocation,
-    metrics, benchmark, correlation_matrix, tickers, qaoa_tickers,
+    metrics, benchmark, correlation_matrix, tickers,
     backend_used, used_simulator_fallback, fallback_reason,
     raw_counts,
   } = results;
@@ -24,11 +24,6 @@ export default function PortfolioResults({ results, onReset }) {
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-sm font-medium text-primary">Results</h2>
           <BackendBadge backend_used={backend_used} used_simulator_fallback={used_simulator_fallback} fallback_reason={fallback_reason} />
-          {qaoa_tickers && qaoa_tickers.length < tickers.length && (
-            <span className="text-[11px] text-subtle border border-border rounded-full px-2.5 py-0.5">
-              QAOA subset: {qaoa_tickers.join(", ")}
-            </span>
-          )}
         </div>
         <button onClick={onReset} className="btn-ghost text-xs py-1.5 px-3 shrink-0">New analysis</button>
       </div>

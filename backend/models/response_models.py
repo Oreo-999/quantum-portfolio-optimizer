@@ -26,8 +26,7 @@ class PortfolioResponse(BaseModel):
     metrics: Metrics
     benchmark: Benchmark
     correlation_matrix: List[List[float]]
-    tickers: List[str]                         # all tickers
-    qaoa_tickers: List[str]                    # subset used for QAOA
+    tickers: List[str]
     backend_used: str
     used_simulator_fallback: bool
     fallback_reason: Optional[str] = None
