@@ -1,7 +1,7 @@
 """
-Stock data fetcher: pulls 2 years of adjusted close prices via yfinance.
-Downloads each ticker individually to avoid yfinance MultiIndex column issues
-across different versions.
+Stock data fetcher using yfinance >= 1.0.
+In v1.x both single and multi-ticker downloads always return a MultiIndex
+DataFrame with (Price, Ticker) columns, so we just do raw["Close"].
 """
 
 import numpy as np
@@ -16,82 +16,43 @@ from fastapi import HTTPException
 @dataclass
 class StockData:
     tickers: List[str]
-    mean_returns: np.ndarray       # annualized, shape (n,)
-    cov_matrix: np.ndarray         # annualized, shape (n, n)
-    correlation_matrix: np.ndarray # shape (n, n)
-    daily_returns: pd.DataFrame    # raw daily returns
-
-
-def _extract_close(raw: pd.DataFrame, ticker: str) -> pd.Series:
-    """
-    Robustly extract the Close price series from a yfinance download result.
-    Handles flat columns, MultiIndex columns, and auto_adjust variants.
-    """
-    if raw.empty:
-        return pd.Series(dtype=float, name=ticker)
-
-    cols = raw.columns
-
-    # MultiIndex: (field, ticker) — common for multi-ticker downloads
-    if isinstance(cols, pd.MultiIndex):
-        if ("Close", ticker) in cols:
-            return raw[("Close", ticker)].rename(ticker)
-        if ("Adj Close", ticker) in cols:
-            return raw[("Adj Close", ticker)].rename(ticker)
-        # Try first available close-like column
-        for field in ["Close", "Adj Close"]:
-            matches = [(f, t) for (f, t) in cols if f == field]
-            if matches:
-                return raw[matches[0]].rename(ticker)
-        return pd.Series(dtype=float, name=ticker)
-
-    # Flat columns (single ticker download)
-    for col in ["Close", "Adj Close"]:
-        if col in cols:
-            return raw[col].rename(ticker)
-
-    return pd.Series(dtype=float, name=ticker)
+    mean_returns: np.ndarray
+    cov_matrix: np.ndarray
+    correlation_matrix: np.ndarray
+    daily_returns: pd.DataFrame
 
 
 def fetch_stock_data(tickers: List[str]) -> StockData:
     end = datetime.today()
     start = end - timedelta(days=2 * 365)
-    start_str = start.strftime("%Y-%m-%d")
-    end_str = end.strftime("%Y-%m-%d")
 
-    close_series = {}
-    failed = []
+    raw = yf.download(
+        tickers,
+        start=start.strftime("%Y-%m-%d"),
+        end=end.strftime("%Y-%m-%d"),
+        auto_adjust=True,
+        progress=False,
+    )
 
-    for ticker in tickers:
-        try:
-            raw = yf.download(
-                ticker,
-                start=start_str,
-                end=end_str,
-                auto_adjust=True,
-                progress=False,
-                actions=False,
-            )
-            series = _extract_close(raw, ticker)
-            if series.empty or series.dropna().empty:
-                failed.append(ticker)
-            else:
-                close_series[ticker] = series
-        except Exception:
-            failed.append(ticker)
-
-    if failed:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Invalid or unavailable tickers: {', '.join(failed)}",
-        )
-
-    if not close_series:
+    if raw.empty:
         raise HTTPException(status_code=422, detail="No price data returned. Check tickers.")
 
-    # Combine into a single DataFrame aligned on dates
-    close = pd.DataFrame(close_series)[tickers]
-    close.dropna(inplace=True)
+    # yfinance 1.x always returns MultiIndex (Price, Ticker)
+    close = raw["Close"]
+
+    # If only one ticker, result is a Series — convert to DataFrame
+    if isinstance(close, pd.Series):
+        close = close.to_frame(name=tickers[0])
+
+    # Validate all tickers are present
+    missing = [t for t in tickers if t not in close.columns]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid or unavailable tickers: {', '.join(missing)}",
+        )
+
+    close = close[tickers].dropna()
 
     if len(close) < 30:
         raise HTTPException(
@@ -118,28 +79,22 @@ def fetch_stock_data(tickers: List[str]) -> StockData:
 def validate_tickers(tickers: List[str]) -> dict:
     end = datetime.today()
     start = end - timedelta(days=10)
-    start_str = start.strftime("%Y-%m-%d")
-    end_str = end.strftime("%Y-%m-%d")
 
-    valid = []
-    invalid = []
+    raw = yf.download(
+        tickers,
+        start=start.strftime("%Y-%m-%d"),
+        end=end.strftime("%Y-%m-%d"),
+        auto_adjust=True,
+        progress=False,
+    )
 
-    for ticker in tickers:
-        try:
-            raw = yf.download(
-                ticker,
-                start=start_str,
-                end=end_str,
-                auto_adjust=True,
-                progress=False,
-                actions=False,
-            )
-            series = _extract_close(raw, ticker).dropna()
-            if len(series) >= 2:
-                valid.append(ticker)
-            else:
-                invalid.append(ticker)
-        except Exception:
-            invalid.append(ticker)
+    if raw.empty:
+        return {"valid": [], "invalid": tickers}
 
+    close = raw["Close"]
+    if isinstance(close, pd.Series):
+        close = close.to_frame(name=tickers[0])
+
+    valid = [t for t in tickers if t in close.columns and close[t].dropna().shape[0] >= 2]
+    invalid = [t for t in tickers if t not in valid]
     return {"valid": valid, "invalid": invalid}
