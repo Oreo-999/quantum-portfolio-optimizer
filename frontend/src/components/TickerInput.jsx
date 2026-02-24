@@ -1,7 +1,15 @@
 import React, { useState, useRef, useCallback } from "react";
 
-const MAX_TICKERS = 10;
-const SUGGESTIONS = ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX"];
+const MAX_TICKERS = 50;
+const QAOA_MAX = 10;
+
+const SUGGESTIONS = [
+  "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","BRK-B","V","JPM",
+  "JNJ","UNH","XOM","LLY","AVGO","MA","HD","CVX","MRK","ABBV",
+  "PEP","KO","COST","BAC","NFLX","WMT","DIS","CSCO","ORCL","CRM",
+  "AMD","INTC","QCOM","TXN","IBM","NOW","ADBE","PYPL","SQ","SHOP",
+  "UBER","LYFT","SNAP","SPOT","COIN","RBLX","HOOD","PLTR","SOFI","RIVN",
+];
 
 export default function TickerInput({
   tickers, setTickers,
@@ -12,14 +20,15 @@ export default function TickerInput({
 }) {
   const [input, setInput] = useState("");
   const [inputError, setInputError] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const inputRef = useRef(null);
 
   const addTicker = useCallback((raw) => {
     const ticker = raw.trim().toUpperCase();
     if (!ticker) return;
-    if (!/^[A-Z0-9.\-]{1,10}$/.test(ticker)) { setInputError("Invalid ticker"); return; }
-    if (tickers.includes(ticker)) { setInputError("Already added"); return; }
-    if (tickers.length >= MAX_TICKERS) { setInputError(`Max ${MAX_TICKERS}`); return; }
+    if (!/^[A-Z0-9.\-]{1,10}$/.test(ticker)) { setInputError("Invalid ticker format"); return; }
+    if (tickers.includes(ticker)) { setInputError(`${ticker} already added`); return; }
+    if (tickers.length >= MAX_TICKERS) { setInputError(`Max ${MAX_TICKERS} tickers`); return; }
     setTickers((p) => [...p, ticker]);
     setInput("");
     setInputError("");
@@ -33,23 +42,31 @@ export default function TickerInput({
   };
 
   const riskLabel = riskTolerance < 0.33 ? "Conservative" : riskTolerance < 0.67 ? "Balanced" : "Aggressive";
+  const available = SUGGESTIONS.filter((t) => !tickers.includes(t));
+  const shown = showAll ? available : available.slice(0, 10);
 
   return (
     <div className="card space-y-5">
       {/* Tickers */}
       <div>
-        <label className="label mb-2 block">Tickers</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="label">Tickers</label>
+          <span className="text-[11px] text-muted">{tickers.length} / {MAX_TICKERS}</span>
+        </div>
+
         <div
           onClick={() => inputRef.current?.focus()}
-          className="min-h-[44px] bg-surface border border-border rounded-lg px-3 py-2 flex flex-wrap gap-1.5 cursor-text
-                     focus-within:border-blue-border transition-colors"
+          className="min-h-[48px] max-h-40 overflow-y-auto bg-surface border border-border rounded-lg px-3 py-2
+                     flex flex-wrap gap-1.5 cursor-text focus-within:border-blue-border transition-colors"
         >
           {tickers.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1 bg-white/5 border border-white/10 text-primary text-xs font-mono px-2 py-0.5 rounded-md">
+            <span key={t} className="inline-flex items-center gap-1 bg-white/5 border border-white/10
+                                     text-primary text-xs font-mono px-2 py-0.5 rounded-md shrink-0">
               {t}
-              <button onClick={(e) => { e.stopPropagation(); removeTicker(t); }} className="text-subtle hover:text-primary transition-colors ml-0.5">
-                ×
-              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); removeTicker(t); }}
+                className="text-subtle hover:text-primary transition-colors"
+              >×</button>
             </span>
           ))}
           {tickers.length < MAX_TICKERS && (
@@ -59,26 +76,44 @@ export default function TickerInput({
               onChange={(e) => { setInput(e.target.value.toUpperCase()); setInputError(""); }}
               onKeyDown={handleKeyDown}
               onBlur={() => input && addTicker(input)}
-              placeholder={tickers.length === 0 ? "AAPL, MSFT…" : ""}
-              className="bg-transparent border-none outline-none text-sm text-primary placeholder-muted font-mono min-w-[100px] flex-1"
+              placeholder={tickers.length === 0 ? "Type any ticker and press Enter…" : ""}
+              className="bg-transparent border-none outline-none text-sm text-primary placeholder-muted font-mono min-w-[160px] flex-1"
             />
           )}
         </div>
+
         {inputError && <p className="text-xs text-negative mt-1">{inputError}</p>}
 
+        {tickers.length > QAOA_MAX && (
+          <p className="text-[11px] text-subtle mt-1.5">
+            QAOA runs on top {QAOA_MAX} stocks · Classical Markowitz uses all {tickers.length}
+          </p>
+        )}
+
         {/* Suggestions */}
-        <div className="flex flex-wrap gap-1 mt-2">
-          {SUGGESTIONS.filter((t) => !tickers.includes(t)).slice(0, 7).map((t) => (
+        <div className="mt-2">
+          <div className="flex flex-wrap gap-1">
+            {shown.map((t) => (
+              <button
+                key={t}
+                onClick={() => addTicker(t)}
+                disabled={tickers.length >= MAX_TICKERS}
+                className="text-[11px] font-mono text-subtle hover:text-secondary border border-border
+                           hover:border-border-soft px-1.5 py-0.5 rounded transition-all
+                           disabled:opacity-20 disabled:cursor-not-allowed"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+          {available.length > 10 && (
             <button
-              key={t}
-              onClick={() => addTicker(t)}
-              disabled={tickers.length >= MAX_TICKERS}
-              className="text-[11px] font-mono text-subtle hover:text-secondary border border-border hover:border-border-soft
-                         px-1.5 py-0.5 rounded transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+              onClick={() => setShowAll((p) => !p)}
+              className="text-[11px] text-muted hover:text-subtle mt-1.5 transition-colors"
             >
-              {t}
+              {showAll ? "Show less" : `+${available.length - 10} more suggestions`}
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -93,8 +128,9 @@ export default function TickerInput({
           value={riskTolerance}
           onChange={(e) => setRiskTolerance(parseFloat(e.target.value))}
           className="w-full h-px bg-border rounded-full appearance-none cursor-pointer
-                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                     [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white"
+                     [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3
+                     [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full
+                     [&::-webkit-slider-thumb]:bg-white"
         />
         <div className="flex justify-between text-[10px] text-muted mt-1.5">
           <span>Min risk</span><span>Max return</span>
@@ -113,7 +149,7 @@ export default function TickerInput({
           </button>
         </div>
         {!useSimulator && (
-          <p className="text-[11px] text-subtle mt-1.5">Requires API key · max 5 stocks</p>
+          <p className="text-[11px] text-subtle mt-1.5">Requires API key · QAOA subset capped at 5 for hardware</p>
         )}
       </div>
 
