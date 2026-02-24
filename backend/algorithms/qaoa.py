@@ -1,19 +1,13 @@
 """
-QAOA portfolio optimizer.
+QAOA portfolio optimizer with convergence tracking.
 
-QUBO formulation:
-  Each stock i is a binary variable x_i ∈ {0, 1}.
-  Objective: minimize  Σ_i Σ_j cov[i,j] * x_i * x_j
-                      - risk_tolerance * Σ_i mean_return[i] * x_i
-
-Simulation backend:
-  - AerSimulator.run() with shot-based QASM simulation — does NOT store the
-    full 2^n statevector, so it scales to much larger circuits (30-50+ qubits).
-  - IBM hardware: SamplerV2 via qiskit-ibm-runtime Session.
+Returns (allocation, raw_counts, convergence) where convergence is the
+list of COBYLA cost-function values per iteration — used to plot the
+optimization curve in the frontend.
 """
 
 import numpy as np
-from typing import Tuple, Dict
+from typing import Tuple, Dict, List
 from config import BackendConfig
 
 
@@ -41,7 +35,13 @@ def run_qaoa(
     backend_config: BackendConfig,
     p: int = 2,
     shots: int = 1024,
-) -> Tuple[np.ndarray, Dict[str, int]]:
+) -> Tuple[np.ndarray, Dict[str, int], List[float]]:
+    """
+    Returns:
+      allocation     — binary weight vector (1 = include stock)
+      raw_counts     — measurement counts dict
+      convergence    — cost-function value at each COBYLA iteration
+    """
     from qiskit_optimization import QuadraticProgram
     from qiskit_optimization.converters import QuadraticProgramToQubo
     from qiskit.circuit.library import QAOAAnsatz
@@ -52,7 +52,6 @@ def run_qaoa(
     n = len(mean_returns)
     Q = build_qubo_matrix(mean_returns, cov_matrix, risk_tolerance)
 
-    # Build QuadraticProgram
     qp = QuadraticProgram(name="portfolio")
     for i in range(n):
         qp.binary_var(name=f"x{i}")
@@ -72,16 +71,15 @@ def run_qaoa(
     ansatz = QAOAAnsatz(cost_operator=ising_op, reps=p)
     ansatz.measure_all()
 
-    # Scale COBYLA iterations with problem size — fewer for large n
     max_iter = max(50, 200 - n * 3)
     inner_shots = min(shots, max(128, shots // max(1, n // 10)))
 
     if backend_config.is_ibm_hardware:
-        raw_counts, params = _run_on_ibm(
+        raw_counts, _, convergence = _run_on_ibm(
             ansatz, ising_op, backend_config.backend, shots, max_iter
         )
     else:
-        raw_counts, params = _run_on_aer(
+        raw_counts, _, convergence = _run_on_aer(
             ansatz, ising_op, backend_config.backend, shots, inner_shots, max_iter
         )
 
@@ -91,33 +89,28 @@ def run_qaoa(
     if allocation.sum() == 0:
         allocation[np.argmax(mean_returns)] = 1.0
 
-    return allocation, raw_counts
+    return allocation, raw_counts, convergence
 
 
 def _run_on_aer(ansatz, cost_op, backend, shots, inner_shots, max_iter):
-    """
-    Shot-based QAOA on AerSimulator using backend.run() directly.
-    Does NOT store the full 2^n statevector — scales to large qubit counts.
-    """
     from qiskit_aer import AerSimulator
     from qiskit import transpile
     from scipy.optimize import minimize as sp_min
 
-    # Use statevector method for small circuits, QASM for large ones
     n_qubits = ansatz.num_qubits
-    if n_qubits <= 20:
-        sim = AerSimulator(method="statevector")
-    else:
-        sim = AerSimulator(method="automatic")
-
+    sim = AerSimulator(method="statevector" if n_qubits <= 20 else "automatic")
     transpiled = transpile(ansatz, sim, optimization_level=1)
     param_list = list(transpiled.parameters)
+
+    convergence: List[float] = []
 
     def cost_func(params):
         bound = transpiled.assign_parameters(dict(zip(param_list, params)))
         job = sim.run(bound, shots=inner_shots)
         counts = job.result().get_counts()
-        return _compute_expectation(counts, cost_op)
+        cost = _compute_expectation(counts, cost_op)
+        convergence.append(float(cost))
+        return cost
 
     x0 = np.random.uniform(-np.pi, np.pi, len(param_list))
     res = sp_min(cost_func, x0, method="COBYLA", options={"maxiter": max_iter, "rhobeg": 0.5})
@@ -127,11 +120,10 @@ def _run_on_aer(ansatz, cost_op, backend, shots, inner_shots, max_iter):
     job = sim.run(bound_final, shots=shots)
     raw_counts = job.result().get_counts()
 
-    return raw_counts, res.x
+    return raw_counts, res.x, convergence
 
 
 def _run_on_ibm(ansatz, cost_op, backend, shots, max_iter):
-    """Run QAOA on real IBM hardware via SamplerV2."""
     from qiskit_ibm_runtime import SamplerV2 as Sampler, Session
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
     from scipy.optimize import minimize as sp_min
@@ -140,6 +132,8 @@ def _run_on_ibm(ansatz, cost_op, backend, shots, max_iter):
     isa_circuit = pm.run(ansatz)
     param_list = list(isa_circuit.parameters)
 
+    convergence: List[float] = []
+
     with Session(backend=backend) as session:
         sampler = Sampler(session=session)
 
@@ -147,7 +141,9 @@ def _run_on_ibm(ansatz, cost_op, backend, shots, max_iter):
             pub = (isa_circuit, params)
             result = sampler.run([pub], shots=shots).result()
             counts = result[0].data.meas.get_counts()
-            return _compute_expectation(counts, cost_op)
+            cost = _compute_expectation(counts, cost_op)
+            convergence.append(float(cost))
+            return cost
 
         x0 = np.random.uniform(-np.pi, np.pi, len(param_list))
         res = sp_min(cost_func, x0, method="COBYLA", options={"maxiter": max_iter, "rhobeg": 0.5})
@@ -156,7 +152,7 @@ def _run_on_ibm(ansatz, cost_op, backend, shots, max_iter):
         result = sampler.run([pub], shots=shots).result()
         raw_counts = result[0].data.meas.get_counts()
 
-    return raw_counts, res.x
+    return raw_counts, res.x, convergence
 
 
 def _compute_expectation(counts: dict, cost_op) -> float:

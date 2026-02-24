@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { usePortfolio } from "./hooks/usePortfolio";
 import TickerInput from "./components/TickerInput";
 import PortfolioResults from "./components/PortfolioResults";
 import LoadingState from "./components/LoadingState";
+import QAOAExplainer from "./components/QAOAExplainer";
 
 export default function App() {
   const {
@@ -14,24 +15,48 @@ export default function App() {
     handleSubmit, resetResults,
   } = usePortfolio();
 
+  const [activeTab, setActiveTab] = useState("optimizer");
+
   return (
     <div className="min-h-screen bg-bg text-primary">
       {/* Header */}
       <header className="border-b border-border sticky top-0 z-10 bg-bg/90 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-6 h-12 flex items-center justify-between">
           <span className="text-sm font-medium tracking-tight">Quantum Portfolio Optimizer</span>
-          <div className="flex items-center gap-5">
-            <span className="hidden sm:block text-xs text-muted">QAOA · Markowitz · IBM Quantum</span>
-            <a href="https://qiskit.org" target="_blank" rel="noopener noreferrer"
-               className="text-[11px] text-muted hover:text-secondary transition-colors">
-              Qiskit
-            </a>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab("optimizer")}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                activeTab === "optimizer"
+                  ? "text-primary bg-white/5"
+                  : "text-muted hover:text-secondary"
+              }`}
+            >
+              Optimizer
+            </button>
+            <button
+              onClick={() => setActiveTab("explainer")}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                activeTab === "explainer"
+                  ? "text-primary bg-white/5"
+                  : "text-muted hover:text-secondary"
+              }`}
+            >
+              How it works
+            </button>
           </div>
         </div>
       </header>
 
-      {/* Main */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      {/* Explainer Tab */}
+      {activeTab === "explainer" && (
+        <main className="max-w-3xl mx-auto px-6 py-8">
+          <QAOAExplainer />
+        </main>
+      )}
+
+      {/* Optimizer Tab */}
+      <main className={`max-w-5xl mx-auto px-6 py-8 ${activeTab !== "optimizer" ? "hidden" : ""}`}>
         {/* Hero — only shown before results */}
         {!results && !loading && (
           <div className="mb-8">
