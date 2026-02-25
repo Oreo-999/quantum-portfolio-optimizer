@@ -92,8 +92,10 @@ def build_qubo_matrix(
         hi = min(n, max_stocks if max_stocks is not None else n)
         K = (lo + hi) / 2.0   # target midpoint of the allowed range
 
-        # Penalty strength ≈ scale of the financial objective so neither dominates
-        A = max(float(np.max(np.abs(Q))), 1e-6)
+        # Penalty strength: 10× the financial objective scale so the cardinality
+        # constraint strongly dominates. A weaker multiplier is ignored by QAOA
+        # because variance-minimizing solutions (few stocks) are naturally low-energy.
+        A = 10.0 * max(float(np.max(np.abs(Q))), 1e-6)
 
         for i in range(n):
             Q[i, i] += A * (1.0 - 2.0 * K)   # diagonal: encourages selecting ~K stocks
@@ -206,7 +208,7 @@ def run_qaoa(
         )
 
     # --- Step 6: Extract the best portfolio from the measurement distribution ---
-    best_bitstring = _extract_best_bitstring(raw_counts, Q, n)
+    best_bitstring = _extract_best_bitstring(raw_counts, Q, n, min_stocks, max_stocks)
     allocation = np.array([int(b) for b in best_bitstring], dtype=float)
 
     # Safety fallback: if every stock was excluded, invest everything in the
@@ -388,39 +390,62 @@ def _compute_expectation(counts: dict, cost_op) -> float:
 # Best solution extraction
 # ---------------------------------------------------------------------------
 
-def _extract_best_bitstring(counts: dict, Q: np.ndarray, n: int) -> str:
+def _extract_best_bitstring(
+    counts: dict,
+    Q: np.ndarray,
+    n: int,
+    min_stocks: int = None,
+    max_stocks: int = None,
+) -> str:
     """
     From the final measurement distribution, pick the bitstring with the
     lowest QUBO objective value x^T Q x.
 
-    We re-evaluate every observed bitstring classically rather than taking
-    the most frequent one, because the highest-probability state isn't always
-    the lowest-energy one (especially at low shot counts).
+    When cardinality bounds are provided, compliant bitstrings (those whose
+    popcount falls within [min_stocks, max_stocks]) are evaluated first. Only
+    if no compliant bitstring appears in the shot distribution do we fall back
+    to the unconstrained best — this ensures the constraint is respected even
+    when QAOA's probability mass hasn't fully concentrated on feasible states.
 
     Args:
-        counts:  Measurement counts from the final circuit run
-        Q:       QUBO matrix
-        n:       Number of stocks (expected bitstring length)
+        counts:      Measurement counts from the final circuit run
+        Q:           QUBO matrix (may include cardinality penalty terms)
+        n:           Number of stocks (expected bitstring length)
+        min_stocks:  Minimum allowed popcount (inclusive), or None
+        max_stocks:  Maximum allowed popcount (inclusive), or None
     Returns:
         Best bitstring as a string of '0'/'1' characters (length n)
     """
+    lo = min_stocks if min_stocks is not None else 0
+    hi = max_stocks if max_stocks is not None else n
+
     best, best_val = None, np.inf
+    best_fallback, best_val_fallback = None, np.inf
 
     for bitstring in counts:
         # Parse and pad/truncate to exactly n bits
         bits = [int(b) for b in reversed(bitstring)]
         bits = (bits + [0] * n)[:n]
         x = np.array(bits, dtype=float)
-
-        # Evaluate the QUBO objective for this allocation
         val = float(x @ Q @ x)
 
-        if val < best_val:
-            best_val = val
-            best = bits
+        k = int(x.sum())  # number of stocks selected by this bitstring
+
+        if lo <= k <= hi:
+            # Compliant — prefer these over everything else
+            if val < best_val:
+                best_val = val
+                best = bits
+        else:
+            # Non-compliant fallback — only used if no compliant bitstring was measured
+            if val < best_val_fallback:
+                best_val_fallback = val
+                best_fallback = bits
+
+    chosen = best if best is not None else best_fallback
 
     # Fallback: all-zero if counts dict is somehow empty
-    if best is None:
+    if chosen is None:
         return "0" * n
 
-    return "".join(str(b) for b in best)
+    return "".join(str(b) for b in chosen)

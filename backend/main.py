@@ -224,6 +224,34 @@ def optimize(req: PortfolioRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"QAOA optimization failed: {exc}")
 
+    # --- Hard cardinality enforcement ---
+    # Even with a strong QUBO penalty and compliant-first extraction, QAOA at low
+    # depth may still violate the bounds (e.g. no compliant bitstring was sampled).
+    # This post-processing guarantees the constraint is met before weighting.
+    if req.min_stocks is not None or req.max_stocks is not None:
+        lo = req.min_stocks or 1
+        hi = req.max_stocks or n
+        k = int(qaoa_binary.sum())
+
+        if k < lo:
+            # Too few: add the highest-return unselected stocks until we hit min
+            unselected = np.where(qaoa_binary == 0)[0]
+            # Sort unselected by descending expected return
+            to_add = unselected[np.argsort(stock_data.mean_returns[unselected])[::-1]]
+            for idx in to_add:
+                if int(qaoa_binary.sum()) >= lo:
+                    break
+                qaoa_binary[idx] = 1.0
+
+        elif k > hi:
+            # Too many: remove the lowest-return selected stocks until we hit max
+            selected_idx = np.where(qaoa_binary == 1)[0]
+            to_remove = selected_idx[np.argsort(stock_data.mean_returns[selected_idx])]
+            for idx in to_remove:
+                if int(qaoa_binary.sum()) <= hi:
+                    break
+                qaoa_binary[idx] = 0.0
+
     # --- Hybrid weighting: run Markowitz on the QAOA-selected subset ---
     # QAOA decides *which* stocks to hold; classical optimizer finds the best
     # *weights* among those stocks. This removes the crude equal-weight penalty
