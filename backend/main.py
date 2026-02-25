@@ -216,20 +216,35 @@ def optimize(req: PortfolioRequest):
             stock_data.cov_matrix,
             req.risk_tolerance,
             backend_config,
-            p=2,       # 2 QAOA layers — good quality/speed tradeoff
+            p=2,        # 2 QAOA layers — good quality/speed tradeoff
             shots=1024, # measurements per circuit evaluation
+            min_stocks=req.min_stocks,
+            max_stocks=req.max_stocks,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"QAOA optimization failed: {exc}")
 
-    # Convert binary vector to equal-weight allocation among selected stocks
-    # e.g. [1,0,1,1] → weights = [1/3, 0, 1/3, 1/3]
+    # --- Hybrid weighting: run Markowitz on the QAOA-selected subset ---
+    # QAOA decides *which* stocks to hold; classical optimizer finds the best
+    # *weights* among those stocks. This removes the crude equal-weight penalty
+    # and reflects how quantum-classical hybrid algorithms are intended to work.
     selected = qaoa_binary.astype(bool)
     qaoa_weights = np.zeros(n)
-    if selected.any():
-        qaoa_weights[selected] = 1.0 / selected.sum()
+    if selected.sum() >= 2:
+        # Slice returns and covariance to the selected subset only
+        idx = np.where(selected)[0]
+        subset_weights = run_classical_optimization(
+            stock_data.mean_returns[idx],
+            stock_data.cov_matrix[np.ix_(idx, idx)],
+            req.risk_tolerance,
+        )
+        qaoa_weights[idx] = subset_weights
+    elif selected.sum() == 1:
+        # Single stock selected — 100% allocation
+        qaoa_weights[selected] = 1.0
     else:
-        # Safety fallback: if QAOA excluded everything, invest equally
+        # QAOA selected nothing (can happen when cardinality penalty is strong);
+        # fall back to equal weight so the response is still useful
         qaoa_weights = np.ones(n) / n
 
     # -----------------------------------------------------------------------

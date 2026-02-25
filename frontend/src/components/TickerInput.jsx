@@ -15,6 +15,8 @@ export default function TickerInput({
   riskTolerance, setRiskTolerance,
   apiKey, setApiKey,
   useSimulator, setUseSimulator,
+  minStocks, setMinStocks,
+  maxStocks, setMaxStocks,
   onSubmit, loading, error,
 }) {
   const [input, setInput] = useState("");
@@ -128,6 +130,58 @@ export default function TickerInput({
         <div className="flex justify-between text-[10px] text-muted mt-1.5">
           <span>Min risk</span><span>Max return</span>
         </div>
+      </div>
+
+      {/* Portfolio size */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className="label">Portfolio Size</label>
+          <button
+            onClick={() => { setMinStocks(null); setMaxStocks(null); }}
+            className="text-[10px] text-muted hover:text-subtle transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1">
+            <p className="text-[10px] text-muted mb-1">Min stocks</p>
+            <input
+              type="number"
+              min={1}
+              max={tickers.length || MAX_TICKERS}
+              value={minStocks ?? ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? null : Math.max(1, parseInt(e.target.value, 10));
+                setMinStocks(v);
+              }}
+              placeholder="Any"
+              className="input-field text-xs w-full font-mono"
+            />
+          </div>
+          <span className="text-muted text-xs mt-4">–</span>
+          <div className="flex-1">
+            <p className="text-[10px] text-muted mb-1">Max stocks</p>
+            <input
+              type="number"
+              min={1}
+              max={tickers.length || MAX_TICKERS}
+              value={maxStocks ?? ""}
+              onChange={(e) => {
+                const v = e.target.value === "" ? null : Math.max(1, parseInt(e.target.value, 10));
+                setMaxStocks(v);
+              }}
+              placeholder="Any"
+              className="input-field text-xs w-full font-mono"
+            />
+          </div>
+        </div>
+        {minStocks !== null && maxStocks !== null && minStocks > maxStocks && (
+          <p className="text-xs text-negative mt-1">Min must be ≤ max</p>
+        )}
+        <p className="text-[10px] text-muted mt-1.5">
+          QAOA cardinality penalty · leave blank for unconstrained
+        </p>
       </div>
 
       {/* Backend */}

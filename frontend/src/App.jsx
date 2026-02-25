@@ -11,6 +11,8 @@ export default function App() {
     riskTolerance, setRiskTolerance,
     apiKey, setApiKey,
     useSimulator, setUseSimulator,
+    minStocks, setMinStocks,
+    maxStocks, setMaxStocks,
     results, loading, loadingStage, error,
     handleSubmit, resetResults,
   } = usePortfolio();
@@ -80,6 +82,8 @@ export default function App() {
               riskTolerance={riskTolerance} setRiskTolerance={setRiskTolerance}
               apiKey={apiKey} setApiKey={setApiKey}
               useSimulator={useSimulator} setUseSimulator={setUseSimulator}
+              minStocks={minStocks} setMinStocks={setMinStocks}
+              maxStocks={maxStocks} setMaxStocks={setMaxStocks}
               onSubmit={handleSubmit} loading={loading} error={error}
             />
 

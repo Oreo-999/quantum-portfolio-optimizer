@@ -39,6 +39,8 @@ def build_qubo_matrix(
     mean_returns: np.ndarray,
     cov_matrix: np.ndarray,
     risk_tolerance: float,
+    min_stocks: int = None,
+    max_stocks: int = None,
 ) -> np.ndarray:
     """
     Build the QUBO matrix Q such that x^T Q x is the objective to minimize.
@@ -50,10 +52,23 @@ def build_qubo_matrix(
     Both terms are normalized to [0,1] so the risk_tolerance λ ∈ [0,1] has
     intuitive meaning: 0 = pure risk minimization, 1 = pure return maximization.
 
+    Cardinality constraint (optional):
+      When min_stocks/max_stocks are set, a soft penalty is added:
+        A · (Σxᵢ - K)²   where K = midpoint of [min_stocks, max_stocks]
+      Expanded over binary variables (xᵢ² = xᵢ):
+        = A · (1 - 2K) · Σxᵢ  +  2A · Σᵢ﹤ⱼ xᵢxⱼ  +  const
+      In QUBO matrix form:
+        Q[i,i] += A · (1 - 2K)   for all i      (diagonal)
+        Q[i,j] += A               for all i ≠ j  (off-diagonal, symmetric)
+      The penalty strength A is set to the scale of the financial objective so
+      the cardinality signal is competitive but not overwhelming.
+
     Args:
         mean_returns:    Annualized expected return per stock (shape: n,)
         cov_matrix:      Annualized covariance matrix (shape: n x n)
         risk_tolerance:  λ ∈ [0,1] — blends risk vs return
+        min_stocks:      Minimum number of stocks to select (optional)
+        max_stocks:      Maximum number of stocks to select (optional)
     Returns:
         Q: (n x n) QUBO matrix
     """
@@ -71,6 +86,21 @@ def build_qubo_matrix(
         # Diagonal: subtract the return contribution (negating = maximizing)
         Q[i, i] -= risk_tolerance * mean_returns[i] / ret_scale
 
+    # --- Cardinality penalty: A · (Σxᵢ - K)² ---
+    if min_stocks is not None or max_stocks is not None:
+        lo = max(1, min_stocks if min_stocks is not None else 1)
+        hi = min(n, max_stocks if max_stocks is not None else n)
+        K = (lo + hi) / 2.0   # target midpoint of the allowed range
+
+        # Penalty strength ≈ scale of the financial objective so neither dominates
+        A = max(float(np.max(np.abs(Q))), 1e-6)
+
+        for i in range(n):
+            Q[i, i] += A * (1.0 - 2.0 * K)   # diagonal: encourages selecting ~K stocks
+            for j in range(n):
+                if i != j:
+                    Q[i, j] += A               # off-diagonal: penalizes excess selections
+
     return Q
 
 
@@ -85,6 +115,8 @@ def run_qaoa(
     backend_config: BackendConfig,
     p: int = 2,
     shots: int = 1024,
+    min_stocks: int = None,
+    max_stocks: int = None,
 ) -> Tuple[np.ndarray, Dict[str, int], List[float]]:
     """
     Run the full QAOA optimization loop.
@@ -123,7 +155,7 @@ def run_qaoa(
     n = len(mean_returns)
 
     # --- Step 1: Build QUBO matrix ---
-    Q = build_qubo_matrix(mean_returns, cov_matrix, risk_tolerance)
+    Q = build_qubo_matrix(mean_returns, cov_matrix, risk_tolerance, min_stocks, max_stocks)
 
     # --- Step 2: Encode the QUBO as a Qiskit QuadraticProgram ---
     # Each binary variable x_i represents "include stock i"

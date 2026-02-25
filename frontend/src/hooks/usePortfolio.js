@@ -30,6 +30,8 @@ export function usePortfolio() {
   const [riskTolerance, setRiskTolerance] = useState(0.5); // λ ∈ [0,1]
   const [apiKey, setApiKey] = useState("");            // IBM Quantum API key (optional)
   const [useSimulator, setUseSimulator] = useState(true); // true = AerSimulator
+  const [minStocks, setMinStocks] = useState(null);   // Cardinality lower bound (null = unconstrained)
+  const [maxStocks, setMaxStocks] = useState(null);   // Cardinality upper bound (null = unconstrained)
 
   // --- Async state ---
   const [results, setResults] = useState(null);        // PortfolioResponse from backend
@@ -84,6 +86,8 @@ export function usePortfolio() {
         risk_tolerance: riskTolerance,
         ibm_api_key: apiKey,
         use_simulator_fallback: useSimulator,
+        min_stocks: minStocks,
+        max_stocks: maxStocks,
       });
       setResults(data);
     } catch (err) {
@@ -94,7 +98,7 @@ export function usePortfolio() {
       setLoading(false);
       setLoadingStage("");
     }
-  }, [tickers, riskTolerance, apiKey, useSimulator, startStageLoop]);
+  }, [tickers, riskTolerance, apiKey, useSimulator, minStocks, maxStocks, startStageLoop]);
 
   /**
    * Clear results and errors to return to the empty state.
@@ -115,6 +119,10 @@ export function usePortfolio() {
     setApiKey,
     useSimulator,
     setUseSimulator,
+    minStocks,
+    setMinStocks,
+    maxStocks,
+    setMaxStocks,
     // Async state (drives the conditional rendering in App.jsx)
     results,
     loading,
